@@ -9,6 +9,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from typing import Dict, List, Optional, Tuple
+
 from .pos_embed import interpolate_resize_pos_embed
 from .tokenization import tokenize_batch
 import mineclip.utils as U
@@ -48,6 +50,50 @@ class ResidualAttentionBlock(nn.Module):
     def forward(self, x: torch.Tensor):
         x = x + self.attention(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
+        return x
+
+
+class HookedResidualAttentionBlock(nn.Module):
+    def __init__(self, d_model: int, n_head: int, attn_mask: torch.Tensor = None, block_index: int = None):
+        super().__init__()
+
+        self.attn = nn.MultiheadAttention(d_model, n_head)
+        self.ln_1 = nn.LayerNorm(d_model)
+        self.mlp = nn.Sequential(
+            OrderedDict(
+                [
+                    ("c_fc", nn.Linear(d_model, d_model * 4)),
+                    ("gelu", QuickGELU()),
+                    ("c_proj", nn.Linear(d_model * 4, d_model)),
+                ]
+            )
+        )
+        self.ln_2 = nn.LayerNorm(d_model)
+        self.attn_mask = attn_mask
+
+        # Add identifiers
+        self.block_index = block_index
+        self.n_head = n_head
+
+        # Storage for block input/output
+        self.block_input = None
+        self.block_output = None
+
+    def attention(self, x: torch.Tensor):
+        self.attn_mask = (
+            self.attn_mask.to(dtype=x.dtype, device=x.device)
+            if self.attn_mask is not None
+            else None
+        )
+        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
+
+    def forward(self, x: torch.Tensor):
+        self.block_input = x.detach()
+
+        x = x + self.attention(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+
+        self.block_output = x.detach()
         return x
 
 
@@ -95,7 +141,7 @@ class VisionTransformer(nn.Module):
         )
         self.ln_pre = nn.LayerNorm(width)
         self.blocks = nn.Sequential(
-            *[ResidualAttentionBlock(width, heads) for _ in range(layers)]
+            *[ResidualAttentionBlock(width, heads, block_index=i) for i in range(layers)]
         )
         self.ln_post = nn.LayerNorm(width)
         self.projection = nn.Parameter(scale * torch.randn(width, output_dim))
