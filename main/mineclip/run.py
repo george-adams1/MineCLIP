@@ -4,6 +4,10 @@ from omegaconf import OmegaConf
 
 from mineclip import MineCLIP
 
+# 1 TODO: hook output attention activations
+# 2 TODO: create C matrix
+# 3 TODO: implement textspan
+
 
 @torch.no_grad()
 @hydra.main(config_name="conf", config_path=".", version_base="1.1")
