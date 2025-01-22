@@ -36,18 +36,27 @@ class VideoRewardBase(nn.Module):
         self.reward_head = reward_head
 
     def forward_image_features(self, frames):
-        """
-        [..., C, H, W] -> [..., F], independent encoding of each frame image
-        """
+        # print("A. Starting forward_image_features", flush=True)
         assert frames.ndim >= 4
         leading_dims = frames.size()[:-3]
         C, H, W = frames.size()[-3:]
         frames = frames.view(-1, C, H, W)
+        # print("B. About to preprocess", flush=True)
         frames = U.basic_image_tensor_preprocess(
             frames, mean=MC_IMAGE_MEAN, std=MC_IMAGE_STD
         )
+        # print("C. About to run image encoder", flush=True)
         features = self.image_encoder(frames)
+        # print("D. Got features from image encoder", flush=True)
+        # print("E. Recorded blocks:", self.image_encoder.recorded_blocks, flush=True)
+        # print(type(self.image_encoder.recorded_blocks[0]['input']))
+        # print(self.image_encoder.recorded_blocks[0]['input'].shape)
+        # print(len(self.image_encoder.recorded_blocks.keys()))
+        # print(type(self.image_encoder.recorded_blocks[0]['attention_patterns']))
+        # print(self.image_encoder.recorded_blocks[0]['attention_patterns'].shape)
+        # quit()
         return features.view(*leading_dims, features.size(-1))
+
 
     def forward_video_features(self, image_features):
         """

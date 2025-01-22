@@ -31,7 +31,10 @@ def main(cfg):
     image_feats = model.forward_image_features(video)
     video_feats = model.forward_video_features(image_feats)
     assert video_feats.shape == (VIDEO_BATCH, 512)
+    print('encoding video features')
     video_feats_2 = model.encode_video(video)
+    print('encoded video features')
+    # quit()
     # encode_video is equivalent to forward_video_features(forward_image_features(video))
     torch.testing.assert_allclose(video_feats, video_feats_2)
 

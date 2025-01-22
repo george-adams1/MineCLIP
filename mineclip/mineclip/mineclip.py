@@ -93,8 +93,17 @@ class MineCLIP(VideoRewardBase):
     def encode_text(self, text_tokens):
         return self.clip_model.encode_text(text_tokens)
 
+    # def encode_video(self, videos):
+    #     return self.forward_video_features(self.forward_image_features(videos))
+
     def encode_video(self, videos):
-        return self.forward_video_features(self.forward_image_features(videos))
+        print(type(self.image_encoder))
+        # print("1. Starting encode_video", flush=True)
+        features = self.forward_image_features(videos)
+        # print("2. Finished forward_image_features", flush=True)
+        result = self.forward_video_features(features)
+        # print("3. Finished forward_video_features", flush=True)
+        return result
 
     def clamp_logit_scale(self):
         self.clip_model.clamp_logit_scale()

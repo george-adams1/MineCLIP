@@ -78,6 +78,7 @@ class HookedResidualAttentionBlock(nn.Module):
         # Storage for block input/output
         self.block_input = None
         self.block_output = None
+        self.attention_patterns = None
 
     def attention(self, x: torch.Tensor):
         self.attn_mask = (
@@ -85,7 +86,11 @@ class HookedResidualAttentionBlock(nn.Module):
             if self.attn_mask is not None
             else None
         )
-        return self.attn(x, x, x, need_weights=False, attn_mask=self.attn_mask)[0]
+
+        output, attention_weights = self.attn(x, x, x, need_weights=True, average_attn_weights=False, attn_mask=self.attn_mask)
+        self.attention_patterns = attention_weights.detach()
+
+        return output
 
     def forward(self, x: torch.Tensor):
         self.block_input = x.detach()
@@ -141,10 +146,12 @@ class VisionTransformer(nn.Module):
         )
         self.ln_pre = nn.LayerNorm(width)
         self.blocks = nn.Sequential(
-            *[ResidualAttentionBlock(width, heads, block_index=i) for i in range(layers)]
+            *[HookedResidualAttentionBlock(width, heads, block_index=i) for i in range(layers)]
         )
         self.ln_post = nn.LayerNorm(width)
         self.projection = nn.Parameter(scale * torch.randn(width, output_dim))
+
+        self.recorded_blocks = {}
 
     def resize_pos_embed(self, new_resolution):
         """
@@ -181,9 +188,17 @@ class VisionTransformer(nn.Module):
         x = self.ln_pre(x)
 
         x = x.permute(1, 0, 2)  # NLD -> LND
-        x = self.blocks(x)
-        x = x.permute(1, 0, 2)  # LND -> NLD
 
+        # Process blocks and record outputs
+        for i, block in enumerate(self.blocks):
+            x = block(x)
+            self.recorded_blocks[i] = {
+                'input': block.block_input,
+                'output': block.block_output,
+                'attention_patterns': block.attention_patterns,
+            }
+
+        x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_post(x[:, 0, :])
 
         if self.projection is not None:
@@ -319,7 +334,8 @@ class CLIP(nn.Module):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
     def encode_image(self, image):
-        return self.vision_model(image)
+        block_activations = self.vision_model.recorded_blocks
+        return self.vision_model(image), block_activations
 
     def tokenize_text(self, text: str | list[str]):
         if isinstance(text, list):
@@ -340,7 +356,9 @@ class CLIP(nn.Module):
         if image.ndim == 2:
             image_features = image
         else:
-            image_features = self.encode_image(image)
+            image_features, block_activations = self.encode_image(image)
+            # print(block_activations)
+            # quit()
         if text.dtype == torch.long:
             text_features = self.encode_text(text)
         else:
