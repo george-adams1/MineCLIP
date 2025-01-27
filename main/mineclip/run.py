@@ -3,10 +3,61 @@ import hydra
 from omegaconf import OmegaConf
 
 from mineclip import MineCLIP
+from PIL import Image
+import torchvision.transforms as T
 
 # 1 TODO: hook output attention activations
 # 2 TODO: create C matrix
 # 3 TODO: implement textspan
+
+
+def textspan(head_contributions, text_embeddings, m=5):
+    """
+    Algorithm 1: TextSpan
+
+    Args:
+        head_contributions: C matrix for a specific head [K x d']
+        text_embeddings: R matrix of text embeddings [M x d']
+        m: Number of components to find
+
+    Returns:
+        selected_texts: Indices of selected text descriptions
+        projected_contributions: The projected representations C'
+    """
+    K, d = head_contributions.shape
+    M, _ = text_embeddings.shape
+
+    # Initialize
+    C = head_contributions.clone()
+    R = text_embeddings.clone()
+    C_proj = torch.zeros_like(head_contributions)
+    selected_texts = []
+
+    for i in range(m):
+        # Compute D = RC^T
+        D = R @ C.T  # [M x K]
+
+        # Find text with highest variance
+        variances = torch.var(D, dim=1)  # [M]
+        j_star = torch.argmax(variances)
+        selected_texts.append(j_star)
+
+        # Get the selected text direction
+        r_star = R[j_star]  # [d']
+
+        # Project contributions onto this direction
+        proj_scalar = (C @ r_star) / (r_star @ r_star)  # [K]
+        projection = torch.outer(proj_scalar, r_star)  # [K x d']
+
+        # Update C' and remove projection from C
+        C_proj += projection
+        C = C - projection
+
+        # Remove projection from remaining text embeddings
+        R_proj_scalar = (R @ r_star) / (r_star @ r_star)  # [M]
+        R = R - torch.outer(R_proj_scalar, r_star)
+
+    return selected_texts, C_proj
 
 
 @torch.no_grad()
@@ -19,28 +70,58 @@ def main(cfg):
 
     model = MineCLIP(**cfg).to(device)
 
-    video = torch.randint(0, 255, (6, 16, 3, 160, 256), device=device)
+    # Load image
+    image = Image.open("/mnt/c/Users/georg/Desktop/coding/MineCLIP_fork/villager.jpg")
+
+    # Create transform pipeline
+    transform = T.Compose([
+        T.Resize((160, 256)),  # Match your dimensions
+        T.ToTensor(),  # Convert to tensor [3, 160, 256]
+        T.Lambda(lambda x: x * 255)  # Scale to 0-255 range like your random input
+    ])
+
+    # Process image
+    single_frame = transform(image)
+
+    # Expand dimensions to match [6, 16, 3, 160, 256]
+    # First duplicate for 16 frames
+    video_frames = single_frame.unsqueeze(0).repeat(16, 1, 1, 1)  # [16, 3, 160, 256]
+    # Then duplicate for 6 batch items
+    video = video_frames.unsqueeze(0).repeat(6, 1, 1, 1, 1)  # [6, 16, 3, 160, 256]
+
+    # Move to correct device
+    video = video.to(device)
+
+    # video = torch.randint(0, 255, (6, 16, 3, 160, 256), device=device)
     prompts = [
-        "hello, this is MineCLIP",
-        "MineCLIP is a VideoCLIP model trained on YouTube dataset from MineDojo's knowledge base",
+        "a minecraft villager",
+        "the hockey player is skating on the ice",
         "Feel free to also checkout MineDojo at",
-        "https://minedojo.org",
+        "Minecraft is a sandbox video game developed by Mojang Studios",
     ]
     VIDEO_BATCH, TEXT_BATCH = video.size(0), len(prompts)
 
-    image_feats = model.forward_image_features(video)
+    image_feats, contribution_matrix = model.forward_image_features(video)
     video_feats = model.forward_video_features(image_feats)
     assert video_feats.shape == (VIDEO_BATCH, 512)
     print('encoding video features')
-    video_feats_2 = model.encode_video(video)
+    # video_feats_2, contribution_matrix = model.encode_video(video)
     print('encoded video features')
     # quit()
     # encode_video is equivalent to forward_video_features(forward_image_features(video))
-    torch.testing.assert_allclose(video_feats, video_feats_2)
+    # torch.testing.assert_allclose(video_feats, video_feats_2)
 
     # encode batch of prompts
     text_feats_batch = model.encode_text(prompts)
     assert text_feats_batch.shape == (TEXT_BATCH, 512)
+
+    layer = 10
+    head = 8
+
+    texts, C_proj = textspan(contribution_matrix[layer, head], text_feats_batch)
+    print(texts)
+    print(C_proj.shape)
+    quit()
 
     # compute reward from features
     logits_per_video, logits_per_text = model.forward_reward_head(

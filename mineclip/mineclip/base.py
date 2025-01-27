@@ -93,7 +93,7 @@ class VideoRewardBase(nn.Module):
         # print(c.shape)
 
         # quit()
-        return features.view(*leading_dims, features.size(-1))
+        return features.view(*leading_dims, features.size(-1)), c
 
 
     def forward_video_features(self, image_features):
