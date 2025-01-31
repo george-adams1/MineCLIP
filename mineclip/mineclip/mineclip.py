@@ -99,6 +99,7 @@ class MineCLIP(VideoRewardBase):
     def encode_video(self, videos):
         # print(type(self.image_encoder))
         # print("1. Starting encode_video", flush=True)
+        print('testing')
         features, contribution_matrix = self.forward_image_features(videos)
         # print("2. Finished forward_image_features", flush=True)
         result = self.forward_video_features(features)

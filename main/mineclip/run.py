@@ -5,6 +5,10 @@ from omegaconf import OmegaConf
 from mineclip import MineCLIP
 from PIL import Image
 import torchvision.transforms as T
+import numpy as np
+
+# torch.manual_seed(42)
+# np.random.seed(42)
 
 # 1 TODO: hook output attention activations
 # 2 TODO: create C matrix
@@ -69,9 +73,10 @@ def main(cfg):
     OmegaConf.set_struct(cfg, True)
 
     model = MineCLIP(**cfg).to(device)
+    print(device)
 
     # Load image
-    image = Image.open("/mnt/c/Users/georg/Desktop/coding/MineCLIP_fork/villager.jpg")
+    image = Image.open("/mnt/c/Users/georg/Desktop/coding/MineCLIP_fork/diamond_pickaxe.jpg")
 
     # Create transform pipeline
     transform = T.Compose([
@@ -95,13 +100,24 @@ def main(cfg):
     # video = torch.randint(0, 255, (6, 16, 3, 160, 256), device=device)
     prompts = [
         "a minecraft villager",
-        "the hockey player is skating on the ice",
+        "a creaper in minecraft",
         "Feel free to also checkout MineDojo at",
         "Minecraft is a sandbox video game developed by Mojang Studios",
+        "the minecraft inventory menu",
+        "a minecraft player holding a diamond sword",
+        "crafting table",
+        'crafting table in minecraft',
+        'diamond pickaxe',
+        'a minecraft diamond pickaxe',
+        'a minecraft diamond pickaxe on a crafting table',
+        'a minecraft pickaxe',
     ]
     VIDEO_BATCH, TEXT_BATCH = video.size(0), len(prompts)
 
-    image_feats, contribution_matrix = model.forward_image_features(video)
+    # print(model.eval())
+    model.eval()
+
+    image_feats= model.forward_image_features(video)
     video_feats = model.forward_video_features(image_feats)
     assert video_feats.shape == (VIDEO_BATCH, 512)
     print('encoding video features')
@@ -115,13 +131,16 @@ def main(cfg):
     text_feats_batch = model.encode_text(prompts)
     assert text_feats_batch.shape == (TEXT_BATCH, 512)
 
+    # print(video_feats.shape)
+    # print(text_feats_batch.shape)
+    # quit()
+
     layer = 10
     head = 8
 
-    texts, C_proj = textspan(contribution_matrix[layer, head], text_feats_batch)
-    print(texts)
-    print(C_proj.shape)
-    quit()
+    # texts, C_proj = textspan(contribution_matrix[layer, head], text_feats_batch)
+    # print(texts)
+    # print(C_proj.shape)
 
     # compute reward from features
     logits_per_video, logits_per_text = model.forward_reward_head(

@@ -11,7 +11,7 @@ pool_type: ???  # filled by variant
 resolution: [160, 256]
 
 ckpt:
-  path: null  # filled by users
+  path: /mnt/c/Users/georg/Desktop/coding/MineCLIP_fork/checkpoints/avg.pth  # filled by users
   checksum: ???
 
 hydra:

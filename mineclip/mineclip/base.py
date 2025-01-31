@@ -85,15 +85,19 @@ class VideoRewardBase(nn.Module):
         # print(self.image_encoder.recorded_blocks[0]['attention_patterns'].shape)
         # print(self.image_encoder.projection.shape)
 
-        c = compute_contribution_matrix(
-            self.image_encoder.recorded_blocks,
-            self.image_encoder.projection
-        )
+        # c = compute_contribution_matrix(
+        #     self.image_encoder.recorded_blocks,
+        #     self.image_encoder.projection
+        # )
 
         # print(c.shape)
 
+        print(self.image_encoder.projection[0, :10].detach().cpu().numpy())
+
+        c = None
+
         # quit()
-        return features.view(*leading_dims, features.size(-1)), c
+        return features.view(*leading_dims, features.size(-1))
 
 
     def forward_video_features(self, image_features):
