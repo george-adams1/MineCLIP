@@ -92,12 +92,12 @@ class VideoRewardBase(nn.Module):
 
         # print(c.shape)
 
-        print(self.image_encoder.projection[0, :10].detach().cpu().numpy())
+        # print(self.image_encoder.projection[0, :10].detach().cpu().numpy())
 
-        c = None
+        # c = None
 
         # quit()
-        return features.view(*leading_dims, features.size(-1))
+        return features.view(*leading_dims, features.size(-1)), self.image_encoder.recorded_blocks
 
 
     def forward_video_features(self, image_features):

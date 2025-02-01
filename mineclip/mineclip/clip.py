@@ -191,12 +191,13 @@ class VisionTransformer(nn.Module):
 
         # Process blocks and record outputs
         for i, block in enumerate(self.blocks):
-            x = block(x)
-            self.recorded_blocks[i] = {
-                'input': block.block_input,
-                'output': block.block_output,
-                'attention_patterns': block.attention_patterns,
-            }
+            if i == 11:
+                x = block(x)
+                self.recorded_blocks[i] = {
+                    'input': block.block_input,
+                    'output': block.block_output,
+                    'attention_patterns': block.attention_patterns,
+                }
 
         x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_post(x[:, 0, :])
